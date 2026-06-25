@@ -1,0 +1,1210 @@
+{
+  "name": "YT RAG",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4",
+          "mode": "list",
+          "cachedResultName": "Youtube Rag",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        272
+      ],
+      "id": "2203d0f1-ff86-4f46-b42b-dbfad364a42c",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "MF9PEG4Psr3a7DKb",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8dc69f96-055d-4894-b530-54800332e508",
+              "name": "video_url",
+              "value": "={{ $json.video_url }}",
+              "type": "string"
+            },
+            {
+              "id": "3a4a407e-74d5-4a82-9789-b5f5e130cd2d",
+              "name": "row_id",
+              "value": "={{ $json['Row ID'] }}",
+              "type": "string"
+            },
+            {
+              "id": "6ef27bf9-5de4-4060-9f52-1bef1faa8365",
+              "name": "user_category",
+              "value": "={{ $json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "60d73c4a-4ede-49ad-83a7-1727bfd809a9",
+              "name": "processing_start_time",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "cd3746c0-96d7-48f2-b56c-0840cd027b0f",
+              "name": "video_id",
+              "value": "={{ $json.video_url.match(/(?:youtu\\.be\\/|youtube\\.com\\/watch\\?v=)([^?&]+)/)?.[1] || $json.video_url.split('/').pop().split('?')[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        -32
+      ],
+      "id": "712c6ceb-5f56-492c-b958-c875b5e10aab",
+      "name": "extract video url"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "get",
+        "videoId": "={{ $json.video_id }}",
+        "options": {
+          "onBehalfOfContentOwner": ""
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -32
+      ],
+      "id": "1683351d-5d58-4c54-a3b2-4da3804a5ed6",
+      "name": "Extract Video URL",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "IEgg13MhYaN2sY0o",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const youtubeData = $input.first().json;\nconst videoData = $('extract video url').first().json; // ← FIXED THIS LINE\n\n// Check if video data exists\nif (!youtubeData.snippet || !youtubeData.contentDetails) {\n  throw new Error('Video not found, may be private or deleted');\n}\n\n// Parse ISO 8601 duration (PT15M30S → 18:40)\nfunction parseDuration(isoDuration) {\n  const match = isoDuration.match(/PT(\\d+H)?(\\d+M)?(\\d+S)?/);\n  \n  if (!match) return '0:00';\n  \n  const hours = parseInt((match[1] || '0H').replace('H', '')) || 0;\n  const minutes = parseInt((match[2] || '0M').replace('M', '')) || 0;\n  const seconds = parseInt((match[3] || '0S').replace('S', '')) || 0;\n  \n  if (hours > 0) {\n    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;\n  }\n  return `${minutes}:${seconds.toString().padStart(2, '0')}`;\n}\n\n// Get best available thumbnail (priority: maxres > high > medium > default)\nfunction getBestThumbnail(thumbnails) {\n  if (thumbnails.maxres) return thumbnails.maxres.url;\n  if (thumbnails.high) return thumbnails.high.url;\n  if (thumbnails.medium) return thumbnails.medium.url;\n  if (thumbnails.default) return thumbnails.default.url;\n  return '';\n}\n\n// Auto-detect category if not provided by user\nlet category = videoData.user_category || 'General';\nif (!videoData.user_category || videoData.user_category === '') {\n  // Use YouTube's category as fallback\n  const categoryId = youtubeData.snippet.categoryId;\n  const categoryMap = {\n    '1': 'Film & Animation',\n    '2': 'Autos & Vehicles',\n    '10': 'Music',\n    '15': 'Pets & Animals',\n    '17': 'Sports',\n    '19': 'Travel & Events',\n    '20': 'Gaming',\n    '22': 'People & Blogs',\n    '23': 'Comedy',\n    '24': 'Entertainment',\n    '25': 'News & Politics',\n    '26': 'Howto & Style',\n    '27': 'Education',\n    '28': 'Science & Technology',\n    '29': 'Nonprofits & Activism'\n  };\n  category = categoryMap[categoryId] || 'General';\n}\n\nreturn [{\n  json: {\n    // Fields from Extract Video URL (CRITICAL!)\n    video_url: videoData.video_url,\n    video_id: videoData.video_id,\n    row_id: videoData.row_id,\n    processing_start_time: videoData.processing_start_time,\n    \n    // Fields from YouTube API\n    video_title: youtubeData.snippet.title,\n    author: youtubeData.snippet.channelTitle,\n    category: category,\n    duration: parseDuration(youtubeData.contentDetails.duration),\n    thumbnail_url: getBestThumbnail(youtubeData.snippet.thumbnails),\n    published_at: youtubeData.snippet.publishedAt,\n    view_count: youtubeData.statistics?.viewCount || '0',\n    like_count: youtubeData.statistics?.likeCount || '0',\n    comment_count: youtubeData.statistics?.commentCount || '0'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -32
+      ],
+      "id": "9d52f2d5-8a9c-4939-b2c2-01627601672d",
+      "name": "Parse YouTube Metadata"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4",
+          "mode": "list",
+          "cachedResultName": "Youtube Rag",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Row ID": "={{ $('extract video url').first().json.row_id }}",
+            "status": "processing",
+            "video_url": "={{ $('extract video url').first().json.video_url }}",
+            "video_title": "={{ $json.video_title }}",
+            "author": "={{ $json.author }}",
+            "duration": "={{ $json.duration }}",
+            "category": "={{ $json.category }}",
+            "indexed_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "Row ID"
+          ],
+          "schema": [
+            {
+              "id": "Row ID",
+              "displayName": "Row ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "video_url",
+              "displayName": "video_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "video_title",
+              "displayName": "video_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "duration",
+              "displayName": "duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_msg",
+              "displayName": "error_msg",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "chunks_count",
+              "displayName": "chunks_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "indexed_at",
+              "displayName": "indexed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "processing_s",
+              "displayName": "processing_s",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pinecone_ids",
+              "displayName": "pinecone_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        -32
+      ],
+      "id": "e96fbebc-dc63-4bec-a54a-7eb4b427b914",
+      "name": "Update Sheet with metadata",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j8714Mdx18O4z8pe",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.supadata.ai/v1/transcript?url={{ $json.video_url }}&text=true",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "lang",
+              "value": "en"
+            },
+            {
+              "name": "url",
+              "value": "https://api.supadata.ai/v1/transcript"
+            },
+            {
+              "name": "text",
+              "value": "true"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.video_url }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "sd_6a0d776fcce678c82e231c9912240dbb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1344,
+        -32
+      ],
+      "id": "da79008a-4561-4dbb-a6d9-c56c8ff5ef3a",
+      "name": "Fetch Transcript from Supadata",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze and summarize this video:\n\n**Video Details:**\n- Title: {{ $('Parse YouTube Metadata').first().json.video_title }}\n- Author: {{ $('Parse YouTube Metadata').first().json.author }}\n- Category: {{ $('Parse YouTube Metadata').first().json.category }}\n- Duration: {{ $('Parse YouTube Metadata').first().json.duration }}\n\n**Transcript:**\n{{ $json.content }}\n\n---\n\nProvide a summary with these sections:\n\n**Overview:** (2-3 sentences about what the video covers)\n\n**Key Points:**\n- Main concept 1\n- Main concept 2\n- Main concept 3\n\n**Takeaways:** (What viewers should learn from this video)\n\nKeep the total summary under 300 words.",
+        "options": {
+          "systemMessage": "=You are an expert video content analyst that creates concise, informative summaries of video transcripts.\n\nYour task is to analyze video transcripts and create comprehensive summaries that help users quickly understand the video's content without watching it.\n\nFocus on:\n1. Main topic and thesis\n2. Key concepts and ideas explained\n3. Important examples, case studies, or demonstrations\n4. Main takeaways and conclusions\n\nWrite in a clear, professional, and engaging tone. Keep summaries between 200-300 words."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2528,
+        96
+      ],
+      "id": "0b890253-e56d-4736-9459-c7d13297f9f6",
+      "name": "Summary Writer"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "nomic-embed-text",
+          "mode": "list",
+          "cachedResultName": "nomic-embed-text"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2848,
+        -336
+      ],
+      "id": "d7fe2a2a-e64c-4b70-a2d0-55481a3eb2a4",
+      "name": "Pinecone Vector Store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "OtYgRbYIypqQKSYG",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        2448,
+        320
+      ],
+      "id": "ae0aed80-d0fe-4b14-bca7-4c8cfd7eeb16",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9IZqfx5x0tbpsp1q",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "21fba8bc-3a8c-474f-a33c-81558e45e424",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "pending",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "c6fcfc96-34a8-4205-a5fe-050284ad6493",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        272
+      ],
+      "id": "08b9c1b4-4a2b-43db-8aee-58f5d8a58a80",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        224,
+        272
+      ],
+      "id": "0a1da600-e30c-4542-8f22-115d97c86b8b",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2992,
+        -128
+      ],
+      "id": "b2711e86-2132-403d-b65a-e32da4705bed",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3616,
+        96
+      ],
+      "id": "4539d5ae-9fef-491c-8f6b-2c77dccc3a42",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from previous nodes\nconst videoData = $('Parse YouTube Metadata').first().json;\nconst summaryData = $('Extract Summary Text').first().json;\nconst urlData = $('extract video url').first().json;\n\n// Calculate processing time\nconst startTime = new Date(urlData.processing_start_time);\nconst endTime = new Date();\nconst processingSeconds = (endTime - startTime) / 1000;\n\n// Get chunk count from the chunking node\nconst chunkItems = $('Chunk Transcript with Metadata').all();\nconst chunksCount = chunkItems.length;\n\n// Get Pinecone data\nconst pineconeItems = $('Pinecone Vector Store').all();\n\n// Extract Pinecone IDs\nlet pineconeIds = [];\ntry {\n  pineconeIds = pineconeItems\n    .map(item => item.json?.id || item.json?.vector?.id)\n    .filter(Boolean);\n} catch (e) {\n  console.log('Could not extract Pinecone IDs:', e.message);\n}\n\n// Create stats object\nconst stats = {\n  row_id: urlData.row_id,\n  video_id: urlData.video_id,\n  chunks_count: chunksCount,\n  processing_time_seconds: processingSeconds.toFixed(2),\n  indexed_at: endTime.toISOString(),\n  summary: summaryData.summary,\n  status: 'completed',\n  pinecone_ids: pineconeIds.slice(0, 10).join(',') // First 10 IDs only\n};\n\nreturn [{ json: stats }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        96
+      ],
+      "id": "6ab6202e-bf5a-4cf5-8628-1db876781712",
+      "name": "Calculate Stats1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4",
+          "mode": "list",
+          "cachedResultName": "Youtube Rag",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1z4fYPzyBSWfU5x05xPtY7mo7-4F3W-Oy6UlAv0T9nk4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Row ID": "={{ $json.row_id }}",
+            "status": "completed",
+            "chunks_count": "={{ $json.chunks_count }}",
+            "indexed_at": "={{ $json.indexed_at }}",
+            "processing_s": "={{ $json.processing_time_seconds }}",
+            "summary": "={{ $('Extract Summary Text').item.json.summary }}"
+          },
+          "matchingColumns": [
+            "Row ID"
+          ],
+          "schema": [
+            {
+              "id": "Row ID",
+              "displayName": "Row ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "video_url",
+              "displayName": "video_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "video_title",
+              "displayName": "video_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "duration",
+              "displayName": "duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "chunks_count",
+              "displayName": "chunks_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "indexed_at",
+              "displayName": "indexed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processing_s",
+              "displayName": "processing_s",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3392,
+        96
+      ],
+      "id": "f8b55ceb-da2b-4334-9913-33cf6867e8a4",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j8714Mdx18O4z8pe",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the summary from the AI response\nconst aiResponse = $input.first().json;\nconst videoData = $('Fetch Transcript from Supadata').first().json;\n\n// Handle both Ollama (response) and Gemini (output) formats\nlet summaryText = aiResponse.output || aiResponse.response || aiResponse.text || '';\n\n// Clean the summary\nconst summary = summaryText.trim();\n\n// Validate summary\nif (!summary || summary.length < 50) {\n  throw new Error('Summary generation failed or too short');\n}\n\n// Truncate if too long for Google Sheets (50,000 char limit)\nconst truncatedSummary = summary.length > 10000 \n  ? summary.substring(0, 10000) + '...[truncated]'\n  : summary;\n\nreturn [{\n  json: {\n    ...videoData,\n    summary: truncatedSummary\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        96
+      ],
+      "id": "2227770a-6eeb-41bb-92bd-a01086f3d599",
+      "name": "Extract Summary Text"
+    },
+    {
+      "parameters": {
+        "content": "Summarizing and storing statistics section\n",
+        "height": 288,
+        "width": 1024,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2464,
+        -32
+      ],
+      "typeVersion": 1,
+      "id": "53402494-4ec5-43fd-93b6-add5bf051ca3",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Emeddings and vectorizing",
+        "height": 224,
+        "width": 640,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2512,
+        -400
+      ],
+      "typeVersion": 1,
+      "id": "d635a138-d8a0-41e9-9071-0d1b18881a92",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Filtering the data to check whether it is already processed or not.\nif yes, then filter those out.",
+        "height": 256,
+        "width": 432,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -288,
+        176
+      ],
+      "typeVersion": 1,
+      "id": "3e157f59-3e00-4560-976a-e10593c68a80",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Extract URL from sheet\nGet the metadata from youtube\nParse Metadata\nUpdate sheets with metadata\nThen get the transcript from supadata",
+        "height": 288,
+        "width": 1728
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "bbf63375-cbbb-4f96-929f-45dbf150c424",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const transcriptData = $input.first().json;\nconst videoMetadata = $('Parse YouTube Metadata').first().json;\nconst urlData = $('extract video url').first().json;\n\n// Extract transcript text - CRITICAL: Make sure this has actual content\nconst transcript = transcriptData.content || transcriptData.text || transcriptData.transcript || '';\n\nconsole.log('Transcript length:', transcript.length);\nconsole.log('Transcript preview:', transcript.substring(0, 200));\n\nif (!transcript || transcript.length < 100) {\n  throw new Error(`Transcript too short or missing. Got ${transcript.length} chars`);\n}\n\n// Chunking function with overlap\nfunction chunkTextWithOverlap(text, chunkSize = 1000, overlap = 200) {\n  const chunks = [];\n  let start = 0;\n  \n  while (start < text.length) {\n    const end = Math.min(start + chunkSize, text.length);\n    const chunkText = text.slice(start, end);\n    \n    // Try to break at sentence boundaries\n    let actualEnd = end;\n    if (end < text.length) {\n      const lastPeriod = chunkText.lastIndexOf('.');\n      const lastQuestion = chunkText.lastIndexOf('?');\n      const lastExclaim = chunkText.lastIndexOf('!');\n      const breakPoint = Math.max(lastPeriod, lastQuestion, lastExclaim);\n      \n      if (breakPoint > chunkSize * 0.7) { // At least 70% of chunk size\n        actualEnd = start + breakPoint + 1;\n      }\n    }\n    \n    chunks.push({\n      text: text.slice(start, actualEnd).trim(),\n      startChar: start,\n      endChar: actualEnd\n    });\n    \n    start = actualEnd + 1; // FIX: Changed from start + (chunkSize - overlap)\n    if (start >= text.length) break;\n  }\n  \n  return chunks;\n}\n\n// Create chunks\nconst chunks = chunkTextWithOverlap(transcript, 1000, 200);\n\nconsole.log(`Created ${chunks.length} chunks from transcript`);\n\nif (chunks.length === 0) {\n  throw new Error('No chunks created - transcript chunking failed');\n}\n\n// Estimate timestamps\nconst durationParts = videoMetadata.duration.split(':');\nlet totalSeconds = 0;\n\nif (durationParts.length === 3) {\n  totalSeconds = parseInt(durationParts[0]) * 3600 + \n                 parseInt(durationParts[1]) * 60 + \n                 parseInt(durationParts[2]);\n} else if (durationParts.length === 2) {\n  totalSeconds = parseInt(durationParts[0]) * 60 + \n                 parseInt(durationParts[1]);\n}\n\n// Create output with full metadata for each chunk\nreturn chunks.map((chunk, index) => {\n  const progressRatio = chunk.startChar / transcript.length;\n  const estimatedSeconds = Math.floor(totalSeconds * progressRatio);\n  \n  return {\n    json: {\n      // CRITICAL: pageContent MUST be the actual transcript text\n      pageContent: chunk.text,\n      \n      // Metadata that will be stored with the vector\n      metadata: {\n        video_id: urlData.video_id,\n        video_title: videoMetadata.video_title,\n        video_url: videoMetadata.video_url,\n        author: videoMetadata.author,\n        category: videoMetadata.category,\n        duration: videoMetadata.duration,\n        thumbnail_url: videoMetadata.thumbnail_url,\n        published_at: videoMetadata.published_at,\n        \n        // Chunk-specific metadata\n        chunk_index: index,\n        total_chunks: chunks.length,\n        estimated_timestamp_seconds: estimatedSeconds,\n        estimated_timestamp_formatted: new Date(estimatedSeconds * 1000).toISOString().substr(11, 8),\n        \n        // For citation\n        source_type: 'youtube_transcript',\n        indexed_at: new Date().toISOString()\n      }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -320
+      ],
+      "id": "6cf7af30-633c-4504-acc0-59538daeaa5c",
+      "name": "Chunk Transcript with Metadata"
+    },
+    {
+      "parameters": {
+        "jsCode": "const transcriptData = $input.first().json;\nconst videoMetadata = $('Parse YouTube Metadata').first().json;\n\n// Extract transcript\nconst transcript = transcriptData.content || transcriptData.text || '';\n\n// Validation checks\nconst errors = [];\n\nif (!transcript || transcript.length < 100) {\n  errors.push('Transcript too short or missing');\n}\n\nif (transcript.includes('Transcript not available')) {\n  errors.push('Video has no transcript available');\n}\n\nif (transcript.length > 500000) {\n  errors.push('Transcript too long (>500k chars) - video might be too long');\n}\n\n// If errors, throw to stop workflow\nif (errors.length > 0) {\n  throw new Error(`Transcript validation failed: ${errors.join(', ')}`);\n}\n\n// Calculate basic stats\nconst wordCount = transcript.split(/\\s+/).length;\nconst estimatedMinutes = Math.round(wordCount / 150); // ~150 words per minute\n\nreturn [{\n  json: {\n    ...transcriptData,\n    transcript_stats: {\n      char_count: transcript.length,\n      word_count: wordCount,\n      estimated_duration_minutes: estimatedMinutes\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -32
+      ],
+      "id": "ce96d64d-560e-469a-84f0-4ccc17b477b0",
+      "name": "Validate Trancscript"
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        432,
+        2288
+      ],
+      "id": "a7f293a8-777e-446d-a329-25c435b30998",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "v5eGxXhHn4dUDAfH",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.content || '';\n\n// Language detection by word frequency\nconst spanishWords = ['el', 'la', 'que', 'de', 'es', 'en', 'para', 'con', 'por', 'una', 'un', 'y'];\nconst frenchWords = ['le', 'de', 'que', 'est', 'et', 'un', 'une', 'pour', 'avec', 'la', 'les', 'est'];\nconst germanWords = ['der', 'die', 'und', 'in', 'von', 'zu', 'das', 'mit', 'sich', 'des', 'den'];\nconst portugueseWords = ['o', 'a', 'de', 'que', 'é', 'para', 'com', 'um', 'por', 'uma', 'aos'];\nconst urduWords = ['ہے', 'کو', 'میں', 'نے', 'کا', 'کی', 'اور', 'ہے', 'وہ', 'یہ'];\nconst hindiWords = ['है', 'को', 'में', 'ने', 'का', 'की', 'और', 'यह', 'वह', 'जो'];\n\nconst words = content.toLowerCase().split(/\\s+/).slice(0, 300);\n\nlet scores = { es: 0, fr: 0, de: 0, pt: 0, ur: 0, hi: 0, en: 0 };\n\nwords.forEach(word => {\n  if (spanishWords.includes(word)) scores.es++;\n  if (frenchWords.includes(word)) scores.fr++;\n  if (germanWords.includes(word)) scores.de++;\n  if (portugueseWords.includes(word)) scores.pt++;\n  if (urduWords.includes(word)) scores.ur++;\n  if (hindiWords.includes(word)) scores.hi++;\n});\n\nlet detectedLang = 'en';\nconst maxScore = Math.max(scores.es, scores.fr, scores.de, scores.pt, scores.ur, scores.hi);\n\nif (maxScore > 10) {\n  if (scores.es === maxScore) detectedLang = 'es';\n  else if (scores.fr === maxScore) detectedLang = 'fr';\n  else if (scores.de === maxScore) detectedLang = 'de';\n  else if (scores.pt === maxScore) detectedLang = 'pt';\n  else if (scores.ur === maxScore) detectedLang = 'ur';\n  else if (scores.hi === maxScore) detectedLang = 'hi';\n}\n\nconsole.log(`Detected language: ${detectedLang}, Score: ${maxScore}`);\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    detected_language: detectedLang,\n    needs_translation: detectedLang !== 'en'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -32
+      ],
+      "id": "6111891b-6ae1-449e-b589-4abd4d8bf14c",
+      "name": "Detect Language"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "172d6e56-c0c8-456c-b1bb-e74b0c4eace2",
+              "leftValue": "={{ $json.needs_translation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1968,
+        -32
+      ],
+      "id": "4d84b567-08c2-4976-9a6b-e52be89e6cce",
+      "name": "Check if Translation Needed"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://libretranslate.de/translate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $json.content }}\",\n  \"source\": \"{{ $json.detected_language }}\",\n  \"target\": \"en\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2240,
+        -272
+      ],
+      "id": "48882fc2-5585-4b49-b600-3e31f33f0734",
+      "name": "LibreTranslate Translate"
+    },
+    {
+      "parameters": {
+        "content": "Translate the data if required\n",
+        "height": 240,
+        "width": 336,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2128,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "033e5d2b-6c60-4da7-bbfc-4f64b2ddee9b",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        -128
+      ],
+      "id": "aecb33d3-8154-487e-b24b-1b0b45e39c24",
+      "name": "Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9IZqfx5x0tbpsp1q",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract video url": {
+      "main": [
+        [
+          {
+            "node": "Extract Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video URL": {
+      "main": [
+        [
+          {
+            "node": "Parse YouTube Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse YouTube Metadata": {
+      "main": [
+        [
+          {
+            "node": "Update Sheet with metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Sheet with metadata": {
+      "main": [
+        [
+          {
+            "node": "Fetch Transcript from Supadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Transcript from Supadata": {
+      "main": [
+        [
+          {
+            "node": "Validate Trancscript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Writer": {
+      "main": [
+        [
+          {
+            "node": "Extract Summary Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summary Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "extract video url",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Stats1": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Extract Summary Text": {
+      "main": [
+        [
+          {
+            "node": "Calculate Stats1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Transcript with Metadata": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Trancscript": {
+      "main": [
+        [
+          {
+            "node": "Detect Language",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        []
+      ]
+    },
+    "Detect Language": {
+      "main": [
+        [
+          {
+            "node": "Check if Translation Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Translation Needed": {
+      "main": [
+        [
+          {
+            "node": "LibreTranslate Translate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summary Writer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Chunk Transcript with Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LibreTranslate Translate": {
+      "main": [
+        [
+          {
+            "node": "Chunk Transcript with Metadata",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Summary Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "7293cd78-1331-4d81-9cd4-7af5314b74e2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bc2a7110454670e275f03a1993fd32de5e90be7cbb4368f32703a36283afaed"
+  },
+  "id": "MwNQLvcD2jhfPE28",
+  "tags": []
+}

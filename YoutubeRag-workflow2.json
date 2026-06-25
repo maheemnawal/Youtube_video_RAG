@@ -1,0 +1,290 @@
+{
+  "name": "Q/A YT copy",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconsole.log('Webhook input:', input);\n\n// The data comes in the body property\nconst bodyData = input.body || input;\nconst question = (\n  bodyData.question || \n  bodyData['Your Question'] || \n  ''\n).trim();\n\nconsole.log('Extracted question:', question);\n\nif (!question || question.length < 5) {\n  throw new Error('Question is too short. Please provide more details.');\n}\n\nreturn [{ json: { question, timestamp: new Date().toISOString() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "db47696f-78dc-48c6-ad1c-8d9a3ecb08af",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Answer the user's question based on the information retrieved from the video database.\n\nUser's Question: {{ $json.question }}\nInstructions:\n- Use the vector store tool to search for relevant information\n- Provide a clear, concise answer (2-3 paragraphs)\n- Be conversational and helpful\n",
+        "options": {
+          "systemMessage": "You are an expert at answering questions about YouTube videos. You have access to a vector database of video transcripts. Always search the database before answering and cite your sources.\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        464,
+        0
+      ],
+      "id": "010a4f23-20af-44a3-a274-b9e7df76f58d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "description": "Search the YouTube video transcript database. Use this to find information about topics discussed in the videos.\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        224
+      ],
+      "id": "8d9c538c-976b-4b9a-b9ec-7f88d47e318c",
+      "name": "Answer questions with a vector store"
+    },
+    {
+      "parameters": {
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "nomic-embed-text",
+          "mode": "list",
+          "cachedResultName": "nomic-embed-text"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        432
+      ],
+      "id": "eff470cb-5bd1-41ab-8cd7-609e21fd2551",
+      "name": "Pinecone Vector Store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "OtYgRbYIypqQKSYG",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        544,
+        640
+      ],
+      "id": "64c9769b-8211-4aa7-bacf-e1165f46bd05",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "v5eGxXhHn4dUDAfH",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ff0407a9-5765-4d8d-8e51-bf5da29a9a65",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "90cb75a3-61b4-40b8-9da3-c6cbcf330cf5",
+      "name": "Webhook",
+      "webhookId": "ff0407a9-5765-4d8d-8e51-bf5da29a9a65"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1376,
+        0
+      ],
+      "id": "e560dbf3-b8da-4fa2-8273-d4cda847fe7a",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\n// Extract the answer from AI Agent response\nconst answer = input.output || input.response || input.text || \"No answer available\";\n\n// Clean the answer\nconst cleanAnswer = answer\n  .replace(/\\n/g, ' ')\n  .replace(/\\r/g, '')\n  .replace(/\\t/g, ' ')\n  .trim();\n\n// Return properly formatted response\nreturn [{\n  json: {\n    success: true,\n    answer: cleanAnswer,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        0
+      ],
+      "id": "24e52a2c-f47f-426e-903e-52378486644e",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        784,
+        432
+      ],
+      "id": "0f1bcfb4-4cea-435e-a73b-394b81982176",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9IZqfx5x0tbpsp1q",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        336,
+        208
+      ],
+      "id": "afedb80b-3ff9-473c-8c28-fb217a23e69c",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9IZqfx5x0tbpsp1q",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer questions with a vector store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "29d8eb3f-993c-4350-85a8-3d6f61be500c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bc2a7110454670e275f03a1993fd32de5e90be7cbb4368f32703a36283afaed"
+  },
+  "id": "DkdDsrxrAwvfzzWT",
+  "tags": []
+}

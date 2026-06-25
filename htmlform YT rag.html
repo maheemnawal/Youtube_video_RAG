@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Q&A System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .answer-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .answer-section.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .answer-title {
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .answer-text {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            font-size: 15px;
+        }
+
+        .sources {
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+        }
+
+        .sources-title {
+            color: #666;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .source {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid #667eea;
+        }
+
+        .source-title {
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+
+        .source-author {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .source-relevance {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .confidence {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .confidence.medium {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .confidence.low {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .timestamp {
+            color: #999;
+            font-size: 12px;
+            margin-top: 15px;
+            text-align: right;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>📚 YouTube Q&A System</h1>
+        <p class="subtitle">Ask questions about video content and get instant answers</p>
+
+        <div class="input-group">
+            <input type="text" id="question" placeholder="Ask a question about the videos..." autocomplete="off" />
+            <button id="askBtn" onclick="askQuestion()">Ask</button>
+        </div>
+
+        <div id="answerSection" class="answer-section">
+            <div class="answer-title">Answer</div>
+            <div id="answerText" class="answer-text"></div>
+            <div id="sourcesDiv" class="sources"></div>
+            <div id="confidenceDiv"></div>
+            <div id="timestamp" class="timestamp"></div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ YOUR WEBHOOK URL
+        const WEBHOOK_URL = "http://localhost:5678/webhook/ff0407a9-5765-4d8d-8e51-bf5da29a9a65";
+
+        const questionInput = document.getElementById("question");
+        const askBtn = document.getElementById("askBtn");
+        const answerSection = document.getElementById("answerSection");
+        const answerText = document.getElementById("answerText");
+        const sourcesDiv = document.getElementById("sourcesDiv");
+        const confidenceDiv = document.getElementById("confidenceDiv");
+        const timestamp = document.getElementById("timestamp");
+
+        // Allow Enter key to submit
+        questionInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter" && !askBtn.disabled) {
+                askQuestion();
+            }
+        });
+
+        async function askQuestion() {
+            const question = questionInput.value.trim();
+
+            if (!question) {
+                alert("Please enter a question");
+                return;
+            }
+
+            // Show loading state
+            askBtn.disabled = true;
+            answerSection.classList.add("show");
+            answerText.innerHTML = '<div class="loading"><span class="spinner"></span>Getting answer...</div>';
+            sourcesDiv.innerHTML = "";
+            confidenceDiv.innerHTML = "";
+
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                console.log('Request sent:', { question });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Handle response
+                if (data.output || data.response || data.answer) {
+                    displayAnswer(data);
+                } else if (data.error) {
+                    showError(data.error);
+                } else {
+                    showError("Could not parse response from server");
+                }
+            } catch (error) {
+                showError(`Error: ${error.message}. Make sure WEBHOOK_URL is correct.`);
+                console.error("Full error:", error);
+            } finally {
+                askBtn.disabled = false;
+            }
+        }
+
+        function displayAnswer(data) {
+            console.log('Received data:', data); // Debug log
+
+            // Extract answer text - handle n8n's response format
+            let answer = "No answer provided";
+
+            if (data.answer) {
+                answer = data.answer;
+            } else if (data.output) {
+                answer = data.output;
+            } else if (data.response) {
+                answer = data.response;
+            }
+
+            // Display answer with proper formatting
+            answerText.innerHTML = answer.replace(/\n/g, '<br>');
+
+            // Display sources if available
+            if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+                let sourcesHTML = '<div class="sources-title">Sources</div>';
+                data.sources.forEach(source => {
+                    sourcesHTML += `
+                <div class="source">
+                    <div class="source-title">${escapeHtml(source.video_title || source.title || "Unknown")}</div>
+                    ${source.video_author ? `<div class="source-author">by ${escapeHtml(source.video_author)}</div>` : ""}
+                    ${source.relevance ? `<div class="source-relevance">${escapeHtml(source.relevance)}</div>` : ""}
+                </div>
+            `;
+                });
+                sourcesDiv.innerHTML = sourcesHTML;
+            } else {
+                sourcesDiv.innerHTML = "";
+            }
+
+            // Display confidence level
+            if (data.confidence) {
+                const confidenceClass = data.confidence.toLowerCase();
+                confidenceDiv.innerHTML = `<span class="confidence ${confidenceClass}">${escapeHtml(data.confidence)}</span>`;
+            } else {
+                confidenceDiv.innerHTML = "";
+            }
+
+            // Display timestamp
+            const time = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+            timestamp.textContent = `Answered at ${time}`;
+        }
+
+        function showError(message) {
+                answerText.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+                sourcesDiv.innerHTML = "";
+                confidenceDiv.innerHTML = "";
+                timestamp.textContent = "";
+            }
+
+            // Add this helper function for security
+            function escapeHtml(text) {
+                if (typeof text !== 'string') return text;
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+    </script>
+</body>
+
+</html>
